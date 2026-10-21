@@ -4,7 +4,11 @@ let scores=[], accumulator=0, lastFrameTime=0, wasPaused=false, startupError=nul
 function preload() {
   const name=new URLSearchParams(location.search).get('config') || 'default';
   const safe=/^[a-zA-Z0-9_-]+$/.test(name)?name:'default';
-  config=loadJSON(`/static/configs/${safe}.json`,()=>{},()=>{startupError='Could not load task configuration';});
+  if(location.protocol==='file:') {
+    if(safe!=='default') {startupError='Custom JSON configs need an HTTP server';return;}
+    config=JSON.parse(JSON.stringify(globalThis.PACMAN_FILE_CONFIG));return;
+  }
+  config=loadJSON(`./static/configs/${safe}.json`,()=>{},()=>{startupError='Could not load task configuration';});
 }
 function setup() {
   createCanvas(windowWidth,windowHeight); pixelDensity(Math.min(devicePixelRatio||1,2));
@@ -15,6 +19,11 @@ function setup() {
     env=new GhostGridEnv(config,seed); renderer=new GameRenderer(); taskLog=new TaskLogger(wsLogger,env,config);
     syncSignals=new ContactSync(config.sync_signals||{},taskLog);
     taskLog.onEvent=(event,record)=>syncSignals.queue(event,record);
+    const download=document.getElementById('download-session');
+    if(download) {
+      download.addEventListener('click',event=>{event.stopPropagation();taskLog.download();});
+      for(const type of ['keydown','keyup'])download.addEventListener(type,event=>event.stopPropagation());
+    }
     controls=new UnifiedControls({log:(type,payload)=>taskLog.log(type,payload)});
     user=new TaskControls(controls,a=>{env.action(a); taskLog.drain();},startGame,taskLog,()=>!paused(),togglePause);
     document.addEventListener('visibilitychange',()=>{
@@ -29,7 +38,7 @@ function setup() {
     lastFrameTime=performance.now();
   } catch(e) {startupError=e.message; console.error(e);}
 }
-function paused() {return (syncSignals && env.state!=='menu' && !syncSignals.ready) || manualPaused || document.hidden || !document.hasFocus() || wsLogger.socket?.readyState!==WebSocket.OPEN;}
+function paused() {return (syncSignals && env.state!=='menu' && !syncSignals.ready) || manualPaused || document.hidden || !document.hasFocus();}
 function syncPause(source='automatic') {
   const isPaused=paused() && env.state!=='menu';
   if(isPaused===wasPaused) return;
@@ -97,6 +106,13 @@ function draw() {
   }
   renderer.render(env,scores,isPaused && env.state!=='menu');
   if(syncSignals) syncSignals.render(isPaused);
+  const tools=document.getElementById?.('session-tools');
+  if(tools) {
+    tools.hidden=env.state!=='menu';
+    const status=document.getElementById('logging-status');
+    status.textContent=wsLogger.connected?'Server logging connected.':'Session is stored in this tab; download before closing.';
+    document.getElementById('download-session').hidden=env.gameId===0;
+  }
 }
 function keyPressed(event) {
   if(!user) return;

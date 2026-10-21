@@ -100,3 +100,8 @@ test('scoreboard heading, points and lives labels use font size 20',()=>{
   assert(index>=0);assert.equal(h.calls.slice(0,index).filter(c=>c[0]==='textSize').at(-1)[1],20);
  }
 });
+
+test('no WebSocket connection does not block starting or advancing gameplay',()=>{
+ const h=harness();h.run('wsLogger.socket=null;startGame()');assert.equal(h.run('env.state'),'game_start');
+ h.advance(100);h.run('draw()');assert(h.run('env.tick')>0);assert.equal(h.run('paused()'),false);
+});

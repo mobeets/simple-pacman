@@ -4,7 +4,7 @@ class TaskLogger {
     this.transport=transport; this.env=env; this.records=[]; this.sequence=0;
     this.sessionId=`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,12)}-${Math.random().toString(36).slice(2,12)}`; this.lastFilename=null;
     transport.maxBufferSize=100000;
-    this.log('session_start',{schema_version:1,session_id:this.sessionId,config,seed:env.seed,task_version:'pacman-browser-5',coordinates:'[row,column], zero based',url:location.href});
+    this.log('session_start',{schema_version:1,session_id:this.sessionId,config,seed:env.seed,task_version:'pacman-browser-6',coordinates:'[row,column], zero based',url:location.href});
     window.downloadSession=()=>this.download();
   }
   log(type,payload={}) {
@@ -15,6 +15,8 @@ class TaskLogger {
     return evt;
   }
   updateConnection() {
+    const status=JSON.stringify({connected:this.transport.socket?.readyState===WebSocket.OPEN,enabled:this.transport.enabled??true});
+    if(status!==this.lastStatus) {this.lastStatus=status;this.log('logging_status',JSON.parse(status));}
     if(this.transport.log_filename!==this.lastFilename && this.transport.socket?.readyState===WebSocket.OPEN) {
       this.lastFilename=this.transport.log_filename;
       this.log('log_connection',{filename:this.lastFilename});
