@@ -56,11 +56,16 @@ const assert=require('node:assert/strict');
     }
     assert.equal(await page.evaluate(()=>env.state),'menu');
     assert.equal(await page.evaluate(()=>scores.length),1);
+    const markers=await page.evaluate(()=>taskLog.records.filter(r=>r.type==='sync_trigger').map(r=>r.payload));
+    assert.equal(markers.filter(r=>r.kind==='pacman_eaten').length,3);
+    assert(markers.every(r=>r.audio_requested),'all contacts must request sound');
+
     await page.waitForTimeout(600);
     const facts=await page.evaluate(()=>({errors:startupError,records:taskLog.records.length,states:taskLog.records.filter(x=>x.type==='game_state').length,inputs:taskLog.records.filter(x=>x.type==='direction_input').length,rejected:taskLog.records.filter(x=>x.type==='action'&&!x.payload.accepted).length,session:taskLog.sessionId,filename:wsLogger.log_filename}));
     assert.equal(facts.errors,null);assert(facts.states>100);assert(facts.inputs>=5);assert(facts.rejected>=3);assert.deepEqual(errors,[]);
     // Verify a new game starts in defense, without resetting the schedule.
     await page.keyboard.press('Enter');
+    await page.waitForFunction(()=>env.state==='game_start');
     assert.equal(await page.evaluate(()=>env.context),0);
     assert.equal(await page.evaluate(()=>env.startIndex),2);
     await page.evaluate(()=>taskLog.save());

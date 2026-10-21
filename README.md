@@ -23,6 +23,7 @@ A game is one episode, ending when all three lives are lost. Menu high scores la
 - `static/renderer.js`: p5 drawing and animation only.
 - `static/task_controls.js`: keyboard/gamepad input interpretation.
 - `static/task_logger.js`: task event schema, batching, session JSON export.
+- `static/contact_sync.js`: contact audio/photodiode markers, preparation, and timing logs.
 - `static/sketch.js`: setup, fixed-timestep loop, focus/connection handling, menus.
 
 `server.py`, `static/ws_logger.js`, `static/unified_controller.js`, and `static/gamepad.js` are unchanged. `index.html` adds script imports; CSS makes the canvas fill the window. No Python edits are needed to change the task.
@@ -71,6 +72,27 @@ The ghost chooses a stay or uniformly random legal direction only when stationar
 With pellets disabled, either context can switch geometrically. With pellets enabled, pellet consumption initiates offense, and offense ends geometrically. For a simulation tick with competing events, priority is pellet consumption, then contact, then periodic reward, then context switch. Therefore consuming a pellet on a contact tick protects Pacman during the animation; any continued contact is resolved afterward in offense. Unlike Python's sequential agent/ghost moves, browser entities move simultaneously.
 
 Manual pause freezes the entire simulation, including transition animations, without changing the current simulation state. The simulation also pauses when the tab is hidden, unfocused, or disconnected from the logging server. Paused inputs are logged but discarded. A frame gap above 250 ms is logged and discarded rather than advancing unseen gameplay. Transition time is measured in unpaused simulation time. Rendering follows simulation at 60 Hz, independently of monitor refresh rate.
+
+## Contact synchronization signals
+
+Every `contact` triggers one white photodiode flash and one sound, including the final death. Capturing a ghost (`ghost_eaten`) uses a 1500 Hz tone; Pacman being eaten (`pacman_eaten`) uses 400 Hz. Both default to 60 ms with a nonzero first sample and no attack ramp. The final 5 ms fades out to avoid a second sharp offset. Audio buffers are generated once at the device audio sample rate using native Web Audio, with no extra library, compressed-file decoding, or leading silence. These markers are independent of reward values. Power-pellet pickups, respawns, context changes, and ordinary controls do not trigger them.
+
+The white patch defaults to 80 x 80 canvas pixels at the top left (0,0), for 100 ms. The background there is otherwise black. Under `sync_signals` in the same config JSON, adjust `flash_x`, `flash_y`, `flash_size_px`, `flash_duration_ms`, `capture_frequency_hz`, `death_frequency_hz`, `sound_duration_ms`, and `sound_gain` (0 < gain <= 1). Both tones must have different frequencies. Older config files without `sync_signals` use these defaults. Pause hides an active flash immediately, retaining the pause screen requirement.
+
+The first Play/Space/Start attempt initializes audio. A browser may require a mouse click or keyboard press before allowing playback; if controller Start cannot enable audio, the menu prompts for Play or Space. Gameplay does not begin before audio runs. Unexpected audio suspension pauses the simulation; a keyboard or mouse gesture can re-enable audio. All audio errors are logged explicitly.
+
+The contact event is logged before its marker and linked through `contact_sequence`, `contact_tick`, and `contact_game_id`. The flash and sound are requested together at the end of the same p5 draw callback, after rendering gameplay, and once per contact (not once per animation frame). The logger adds standard wall/performance timestamps to every record. `sync_trigger.payload` contains:
+
+- `kind`: `ghost_eaten` or `pacman_eaten`.
+- `queued_performance_ms`, `trigger_performance_ms`, `visual_draw_performance_ms`: marker queue time, trigger callback time, and canvas drawing submission time, in the same `performance.now()` clock as `t_sketch`.
+- `audio_requested`, `audio_scheduled_context_time_s`, `audio_context_state`, and optional `audio_error`: whether playback was requested and when on the audio clock; this is not a hardware onset acknowledgment.
+- `estimated_audio_output_performance_ms`: estimated output time mapped to the performance clock using `AudioContext.getOutputTimestamp()`, or null if unavailable.
+- `audio_base_latency_s`, `audio_output_latency_s`: browser-reported latency metadata, or null where unsupported.
+- Tone frequency, duration and gain; flash position, size and requested duration.
+
+`sync_flash_end` identifies the trigger and records the draw callback clearing the flash (or a pause/retrigger). `sync_audio_initialized`, `sync_audio_state`, and `sync_audio_error` record audio lifecycle details.
+
+These are software timestamps: simultaneous requests do not guarantee simultaneous physical audio and display output. Display refresh/scanout and the audio device add different delays. For precise cross-system synchronization, record the physical photodiode and audio pulses on the acquisition system and calibrate their offset on the actual setup. The flash ends on the first rendered frame after its requested duration; a stalled renderer can lengthen it. Reference: https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/getOutputTimestamp
 
 ## Data
 

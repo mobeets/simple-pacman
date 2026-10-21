@@ -4,7 +4,7 @@ class TaskLogger {
     this.transport=transport; this.env=env; this.records=[]; this.sequence=0;
     this.sessionId=`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,12)}-${Math.random().toString(36).slice(2,12)}`; this.lastFilename=null;
     transport.maxBufferSize=100000;
-    this.log('session_start',{schema_version:1,session_id:this.sessionId,config,seed:env.seed,task_version:'pacman-browser-4',coordinates:'[row,column], zero based',url:location.href});
+    this.log('session_start',{schema_version:1,session_id:this.sessionId,config,seed:env.seed,task_version:'pacman-browser-5',coordinates:'[row,column], zero based',url:location.href});
     window.downloadSession=()=>this.download();
   }
   log(type,payload={}) {
@@ -20,7 +20,12 @@ class TaskLogger {
       this.log('log_connection',{filename:this.lastFilename});
     }
   }
-  drain() { for(const event of this.env.drainEvents()) this.log(event.type,event); }
+  drain() {
+    for(const event of this.env.drainEvents()) {
+      const record=this.log(event.type,event);
+      if(this.onEvent) this.onEvent(event,record);
+    }
+  }
   snapshot() { this.log('game_state',this.env.snapshot()); }
   save() {
     this.transport.flushAll();

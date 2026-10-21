@@ -85,3 +85,18 @@ test('capture reward text appears during capture and disappears after ghost resp
  h.calls.length=0;h.run('for(let i=0;i<60;i++)env.step();renderer.render(env,[],false)');
  assert(!h.calls.some(c=>c[0]==='text'&&c[1]===config.offense_contact_reward));
 });
+
+test('game waits for audio readiness and starts exactly once after preparation',async()=>{
+ const h=harness();h.run('this.releaseAudio=null;syncSignals={ready:false,prepare:()=>new Promise(resolve=>{releaseAudio=()=>{syncSignals.ready=true;resolve();};})};startGame();');
+ assert.equal(h.run('env.state'),'menu');assert.equal(h.run('startPending'),true);
+ assert.match(h.run('renderer.audioMessage'),/enable sound/);
+ h.run('releaseAudio()');await Promise.resolve();
+ assert.equal(h.run('env.state'),'game_start');assert.equal(h.run('env.gameId'),1);assert.equal(h.run('startPending'),false);
+});
+test('scoreboard heading, points and lives labels use font size 20',()=>{
+ const h=harness();h.run('renderer.menu([{game_id:1,score:100}]);startGame();renderer.render(env,[],false)');
+ for(const label of ['SESSION HIGH SCORES','LIVES','POINTS  0']) {
+  const index=h.calls.findIndex(c=>c[0]==='text'&&c[1]===label);
+  assert(index>=0);assert.equal(h.calls.slice(0,index).filter(c=>c[0]==='textSize').at(-1)[1],20);
+ }
+});

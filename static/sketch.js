@@ -1,4 +1,5 @@
-let env, controls, user, renderer, taskLog, config;
+let env, controls, user, renderer, taskLog, config, syncSignals;
+let startPending=false;
 let scores=[], accumulator=0, lastFrameTime=0, wasPaused=false, startupError=null, manualPaused=false, pauseStart=null;
 function preload() {
   const name=new URLSearchParams(location.search).get('config') || 'default';
@@ -12,6 +13,8 @@ function setup() {
     if(startupError) throw Error(startupError);
     const seed=config.seed===null ? Math.floor(Math.random()*4294967296) : config.seed;
     env=new GhostGridEnv(config,seed); renderer=new GameRenderer(); taskLog=new TaskLogger(wsLogger,env,config);
+    syncSignals=new ContactSync(config.sync_signals||{},taskLog);
+    taskLog.onEvent=(event,record)=>syncSignals.queue(event,record);
     controls=new UnifiedControls({log:(type,payload)=>taskLog.log(type,payload)});
     user=new TaskControls(controls,a=>{env.action(a); taskLog.drain();},startGame,taskLog,()=>!paused(),togglePause);
     document.addEventListener('visibilitychange',()=>{
@@ -26,7 +29,7 @@ function setup() {
     lastFrameTime=performance.now();
   } catch(e) {startupError=e.message; console.error(e);}
 }
-function paused() {return manualPaused || document.hidden || !document.hasFocus() || wsLogger.socket?.readyState!==WebSocket.OPEN;}
+function paused() {return (syncSignals && env.state!=='menu' && !syncSignals.ready) || manualPaused || document.hidden || !document.hasFocus() || wsLogger.socket?.readyState!==WebSocket.OPEN;}
 function syncPause(source='automatic') {
   const isPaused=paused() && env.state!=='menu';
   if(isPaused===wasPaused) return;
@@ -49,7 +52,27 @@ function togglePause(source) {
 }
 function startGame() {
   if(env.state!=='menu' || paused()) return;
-  env.reset(); taskLog.drain(); taskLog.snapshot(); accumulator=0;
+  if(syncSignals && !syncSignals.ready) {
+    // Retry resume on every gesture, even when an earlier resume is pending.
+    const prepared=syncSignals.prepare();
+    if(startPending) {prepared.catch(error=>taskLog.log('sync_audio_error',{message:error.message}));return;}
+    startPending=true; renderer.audioMessage='Click Play or press Space to enable sound';
+    prepared.then(()=>{
+      startPending=false;renderer.audioMessage=null;
+      if(env.state==='menu' && !paused()) beginGame();
+    }).catch(error=>{
+      startPending=false;taskLog.log('sync_audio_error',{message:error.message});
+      renderer.audioMessage='Click Play or press Space to enable sound';
+    });
+    return;
+  }
+  beginGame();
+}
+function beginGame() {
+  env.reset(); taskLog.drain(); taskLog.snapshot(); accumulator=0;lastFrameTime=performance.now();
+}
+function unlockSyncAudio() {
+  if(syncSignals && env.state!=='menu' && !syncSignals.ready) syncSignals.prepare().catch(error=>taskLog.log('sync_audio_error',{message:error.message}));
 }
 function draw() {
   if(startupError) {background('#080c18');fill('white');textAlign(CENTER,CENTER);text(startupError,width/2,height/2);return;}
@@ -73,15 +96,18 @@ function draw() {
     }
   }
   renderer.render(env,scores,isPaused && env.state!=='menu');
+  if(syncSignals) syncSignals.render(isPaused);
 }
 function keyPressed(event) {
   if(!user) return;
+  unlockSyncAudio();
   user.keyPressed(event);
   if(['ArrowUp','ArrowRight','ArrowDown','ArrowLeft',' '].includes(event.key)) return false;
 }
 function keyReleased(event) {if(user) user.keyReleased(event);}
 function mousePressed(event) {
   if(!controls) return;
+  unlockSyncAudio();
   controls.mousePressed(event);
   renderer.playPressed=env.state==='menu' && renderer.hitPlay(mouseX,mouseY);
 }

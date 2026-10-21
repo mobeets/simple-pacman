@@ -97,11 +97,12 @@ class GameRenderer {
     const inset=pressed?3:0;
     rect(b.x+inset,b.y+inset,b.w-2*inset,b.h-2*inset,14);
     fill('#111727'); textSize(28); text('Play',width/2,b.y+b.h/2+(pressed?2:0));
+    if(this.audioMessage) {fill('#edf2ff');textSize(14);text(this.audioMessage,width/2,b.y+94);}
     if(scores.length) {
       fill('#8292b5'); textSize(20); text('SESSION HIGH SCORES',width/2,b.y+115);
       scores.slice().sort((a,b)=>b.score-a.score).slice(0,5).forEach((s,i)=>{
         textStyle(s.game_id===scores[scores.length-1].game_id?BOLD:NORMAL);
-        fill('#e3eaff'); textSize(24); text(`${i+1}.   ${Number(s.score.toFixed(2))}`,width/2,b.y+157+i*34);
+        fill('#e3eaff'); textSize(20); text(`${i+1}.   ${Number(s.score.toFixed(2))}`,width/2,b.y+157+i*34);
       });
       textStyle(NORMAL);
     }

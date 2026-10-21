@@ -21,5 +21,15 @@
   "collision_distance": 0.42,
   "pellet_eat_distance": 0.3,
   "transition_duration_s": 1,
-  "seed": null
+  "seed": null,
+  "sync_signals": {
+    "flash_duration_ms": 100,
+    "flash_size_px": 80,
+    "flash_x": 0,
+    "flash_y": 0,
+    "capture_frequency_hz": 1500,
+    "death_frequency_hz": 400,
+    "sound_duration_ms": 60,
+    "sound_gain": 0.18
+  }
 }
