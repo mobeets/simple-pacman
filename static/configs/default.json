@@ -27,7 +27,7 @@
     "flash_size_px": 80,
     "flash_x": 0,
     "flash_y": 0,
-    "capture_frequency_hz": 1500,
+    "capture_frequency_hz": 800,
     "death_frequency_hz": 400,
     "sound_duration_ms": 60,
     "sound_gain": 0.18
